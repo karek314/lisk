@@ -24,7 +24,7 @@ const wsRPC = require('../../../api/ws/rpc/ws_rpc').wsRPC;
 const Peer = require('../../../logic/peer');
 
 const TIMEOUT = 2000;
-const SOCKET_DESTROY_CLOSE_COUNT = 20;
+const SOCKET_DESTROY_TIMEOUT = 10000; // Allow sockets to be reused in case of frequent reconnect
 const wampClient = new WAMPClient(TIMEOUT); // Timeout failed requests after 1 second
 const socketConnections = {};
 
@@ -60,7 +60,6 @@ const connectSteps = {
 
 	addSocket: (peer, logger) => {
 		peer.socket = scClient.connect(peer.connectionOptions);
-		peer.socket.closeCount = 0;
 
 		if (peer.socket && Object.keys(socketConnections).length < 1000) {
 			const hostname = peer.socket.options.hostname;
@@ -162,6 +161,7 @@ const connectSteps = {
 		const socket = peer.socket;
 
 		socket.on('connect', () => {
+			clearTimeout(socket.destroyTimeout);
 			logger.trace(
 				`[Outbound socket :: connect] Peer connection to ${peer.ip} established`
 			);
@@ -203,10 +203,18 @@ const connectSteps = {
 			if (peer.socket && peer.socket.state === peer.socket.CLOSED) {
 				peer.state = Peer.STATE.DISCONNECTED;
 			}
-			if (++socket.closeCount >= SOCKET_DESTROY_CLOSE_COUNT) {
-				socket.destroy();
-				socket.closeCount = 0;
-			}
+			clearTimeout(socket.destroyTimeout);
+			socket.destroyTimeout = setTimeout(() => {
+				if (socket.state === socket.CLOSED) {
+					// If the socket is still closed after SOCKET_DESTROY_TIMEOUT
+					// (I.e. it hasn't been reopened since), then we will destroy
+					// it completely.
+					socket.destroy();
+					if (socket === peer.socket) {
+						delete peer.socket;
+					}
+				}
+			}, SOCKET_DESTROY_TIMEOUT);
 		});
 
 		// The 'message' event can be used to log all low-level WebSocket messages.
