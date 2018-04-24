@@ -11,6 +11,16 @@
  *
  * Removal or modification of this copyright notice is prohibited.
  */
+
+def generateSrcRelease(directory) {
+	sh """
+	cd ${directory}
+	npm install
+	node ./node_modules/.bin/grunt release
+	cd \$WORKSPACE
+	echo "`jq '.version' ${directory}/config.json`"
+	"""
+}
 pipeline {
 	agent { node { label "node-07" } }
 	stages {
@@ -27,14 +37,6 @@ pipeline {
 					git url: "https://github.com/LiskHQ/lisk.git", branch: params.MIGRATE_TO
 				}
 				sh """
-				generate_src_release() {
-					cd \$1
-					npm install
-					node ./node_modules/.bin/grunt release
-					cd \$WORKSPACE
-					echo "`jq '.version' \$1/config.json`"
-				}
-				export -f generate_src_release
 				dropdb lisk_test || true
 				createdb lisk_test
 				"""
@@ -45,7 +47,7 @@ pipeline {
 				stage('Create FROM source release') {
 					steps {
 						sh """
-						MIGRATE_FROM_VERSION=`generate_src_release "${params.MIGRATE_FROM}"`
+						MIGRATE_FROM_VERSION="${generateSrcRelease(params.MIGRATE_FROM)}"
 						MIGRATE_FROM_SRC="${params.MIGRATE_FROM}/release/lisk-\$MIGRATE_FROM_VERSION.tgz"
 						"""
 					}
@@ -53,7 +55,7 @@ pipeline {
 				stage('Create TO source release') {
 					steps {
 						sh """
-						MIGRATE_TO_VERSION=`generate_src_release "${params.MIGRATE_TO}"`
+						MIGRATE_TO_VERSION="${generateSrcRelease(params.MIGRATE_TO)}"
 						MIGRATE_TO_SRC="${params.MIGRATE_TO}/release/lisk-\$MIGRATE_TO_VERSION.tgz"
 						"""
 					}
@@ -65,7 +67,7 @@ pipeline {
 				stage('Create FROM binary release') {
 					steps {
 						sh """
-						cp MIGRATE_FROM_SRC "lisk-build/src/${params.MIGRATE_FROM}.tar.gz"
+						cp \$MIGRATE_FROM_SRC "lisk-build/src/${params.MIGRATE_FROM}.tar.gz"
 						cd lisk-build
 						bash build.sh -n dev -v "${params.MIGRATE_FROM}"
 						"""
@@ -74,7 +76,7 @@ pipeline {
 				stage('Create TO binary release') {
 					steps {
 						sh """
-						cp MIGRATE_TO_SRC "lisk-build/src/${params.MIGRATE_TO}.tar.gz"
+						cp \$MIGRATE_TO_SRC "lisk-build/src/${params.MIGRATE_TO}.tar.gz"
 						cd lisk-build
 						bash build.sh -n dev -v "${params.MIGRATE_TO}"
 						"""
