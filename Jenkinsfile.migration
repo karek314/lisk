@@ -38,7 +38,6 @@ pipeline {
 					cd \$WORKSPACE
 					echo "`jq '.version' \$1/config.json`"
 				}
-				sudo apt-get install jq
 				MIGRATE_FROM_VERSION=`generate_src_release "${params.MIGRATE_FROM}"`
 				MIGRATE_TO_VERSION=`generate_src_release "${params.MIGRATE_TO}"`
 				MIGRATE_FROM_SRC="${params.MIGRATE_FROM}/release/lisk-\$MIGRATE_FROM_VERSION.tgz"
