@@ -34,6 +34,7 @@ pipeline {
 					cd \$WORKSPACE
 					echo "`jq '.version' \$1/config.json`"
 				}
+				export -f generate_src_release
 				dropdb lisk_test || true
 				createdb lisk_test
 				"""
